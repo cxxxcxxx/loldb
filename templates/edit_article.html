@@ -1,0 +1,551 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Artikel bearbeiten</h1>
+
+<form method="post" id="article-form">
+    <input type="text" name="title" placeholder="Titel" required class="form-control mb-2" value="{{ article.title }}">
+
+    <select name="category" required class="form-select mb-3">
+        <option value="">Kategorie auswählen</option>
+        {% macro render_options(categories, prefix="") %}
+            {% for cat in categories %}
+                {% if cat.children %}
+                    <optgroup label="{{ prefix }}{{ cat.name }}">
+                        {% for sub in cat.children %}
+                            <option value="{{ sub.id }}" {% if article.category_id==sub.id %}selected{% endif %}>{{ sub.name }}</option>
+                        {% endfor %}
+                    </optgroup>
+                {% else %}
+                    <option value="{{ cat.id }}" {% if article.category_id==cat.id %}selected{% endif %}>{{ prefix }}{{ cat.name }}</option>
+                {% endif %}
+            {% endfor %}
+        {% endmacro %}
+        {{ render_options(g.categories_global) }}
+    </select>
+
+    <!-- Hidden: initial blocks_data wird vom Server in dieses Feld serialisiert -->
+    <input type="hidden" name="blocks_json" id="blocks_json" value='{{ blocks_data|default([])|tojson }}'>
+
+    <div id="blocks-editor"></div>
+
+    {% if current_user.is_authenticated and current_user.is_admin %}
+    <div class="toolbar mb-3">
+        <button type="button" data-type="text" class="btn btn-sm btn-outline-primary">+ Text</button>
+        <button type="button" data-type="heading" class="btn btn-sm btn-outline-primary">+ Überschrift</button>
+        <button type="button" data-type="image" class="btn btn-sm btn-outline-primary">+ Bild</button>
+        <button type="button" data-type="item_grid" class="btn btn-sm btn-outline-primary">+ Item-Grid</button>
+        <button type="button" data-type="rune_grid" class="btn btn-sm btn-outline-primary">+ Rune-Grid</button>
+    </div>
+
+    <button type="submit" class="btn btn-success">Artikel speichern</button>
+    {% endif %}
+</form>
+
+<!-- Item Picker Modal -->
+<div class="modal" tabindex="-1" id="itemPickerModal" style="display:none;">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Items auswählen</h5>
+        <button type="button" class="btn-close" onclick="closeItemPicker()"></button>
+      </div>
+      <div class="modal-body" id="itemPickerBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeItemPicker()">Abbrechen</button>
+        <button type="button" class="btn btn-primary" onclick="confirmItemPicker()">Auswählen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Rune Picker Modal -->
+<div class="modal" tabindex="-1" id="runePickerModal" style="display:none;">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Runen auswählen</h5>
+        <button type="button" class="btn-close" onclick="closeRunePicker()"></button>
+      </div>
+      <div class="modal-body" id="runePickerBody" style="display:flex;gap:16px;"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeRunePicker()">Abbrechen</button>
+        <button type="button" class="btn btn-primary" onclick="confirmRunePicker()">Auswählen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+#blocks-editor { margin-bottom: 20px; display:flex; flex-direction:column; gap:15px; }
+.block { border:1px solid #ddd; padding:12px; border-radius:8px; background:#fafafa; position:relative; }
+.block textarea, .block input { width:100%; }
+.block .delete-btn { background:#ff4d4d; color:white; border:none; padding:6px 10px; border-radius:5px; cursor:pointer; }
+.toolbar { display:flex; gap:10px; margin-bottom:20px; }
+.drag-handle { cursor: grab; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 6px; background: #fff; border: 1px solid #e0e0e0; margin-right: 10px; font-size: 16px; color: #666; user-select: none; }
+.block-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.block.dragging { opacity: 0.5; }
+
+.item-grid-preview { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:center; }
+.item-grid-preview img { width:48px; height:48px; object-fit:contain; border-radius:6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.picker-item { cursor:pointer; border-radius:6px; padding:3px; display:inline-block; margin:6px; border:2px solid transparent; }
+.picker-item.selected { border-color:#ffcc00; transform: scale(1.03); }
+.img-preview { max-width:200px; margin-top:8px; display:block; }
+.item-placeholder { display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; background:#f0f0f0; border-radius:6px; color:#444; font-size:12px; border:1px dashed #ccc; }
+
+.rune-available { flex: 1 1 60%; display:flex; flex-direction:column; gap:12px; max-height:60vh; overflow:auto; padding-right:8px; border-right:1px solid #eee; }
+.rune-cat { margin-bottom: 10px; }
+.rune-cat-title { font-weight:600; margin-bottom:8px; }
+.rune-grid { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start; }
+.rune-grid img { width:44px; height:44px; object-fit:contain; border-radius:6px; cursor:pointer; border:2px solid transparent; }
+.rune-selected { flex: 0 0 260px; padding-left:12px; display:flex; flex-direction:column; gap:8px; max-height:60vh; overflow:auto; }
+.rune-selected .sel-title { font-weight:600; margin-bottom:6px; }
+.rune-selected .sel-list { display:flex; flex-direction:column; gap:6px; }
+.rune-selected img { width:40px; height:40px; object-fit:contain; border-radius:6px; cursor:pointer; border:2px solid #ffcc00; }
+.rune-col-preview { display:flex; gap:8px; flex-direction:column; align-items:center; min-width:56px; }
+
+/* picker image styles (categories) */
+.picker-item img { width:56px; height:56px; object-fit:contain; border-radius:6px; }
+.picker-item.selected img { transform: scale(1.03); }
+</style>
+
+<script>
+/* === Initial data: blocksData kommt vom Server (sichere Default-Lösung) === */
+let blocksData = {{ blocks_data|default([])|tojson|safe }};
+
+const editor = document.getElementById("blocks-editor");
+const hiddenInput = document.getElementById("blocks_json");
+
+let pickerCurrentBlockIndex = null;
+let pickerAvailable = {};
+let pickerSelected = new Set();
+
+let runePickerCurrentBlockIndex = null;
+let runeAvailable = {};
+let runeSelected = { keystone: new Set(), subrune: new Set(), smallrune: new Set() };
+
+let dragAllowed = false;
+
+/* --- Helpers --- */
+function escapeHtml(unsafe) {
+    if (unsafe === null || unsafe === undefined) return "";
+    return String(unsafe).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;");
+}
+
+function imageSrcFromStored(val) {
+    if (!val) return "";
+    val = String(val);
+    // runes path stored as "keystone/file.png" or "runes/keystone/file.png"
+    if (val.startsWith("runes/")) {
+        return `/static/${val}`;
+    }
+    if (val.startsWith("keystone/") || val.startsWith("subrune/") || val.startsWith("smallrune/")) {
+        return `/static/runes/${val}`;
+    }
+    if (val.startsWith("items/") || val.startsWith("uploads/")) {
+        return `/static/${val}`;
+    }
+    // fallback assume upload
+    if (val.indexOf("/") !== -1) {
+        // looks like folder/file -> assume items/
+        return `/static/items/${val}`;
+    }
+    return `/static/uploads/${val}`;
+}
+
+async function loadAvailableItems() {
+    try {
+        const res = await fetch("/api/items");
+        pickerAvailable = res.ok ? await res.json() : {};
+    } catch(e) { pickerAvailable = {}; }
+}
+
+async function loadAvailableRunes() {
+    try {
+        const res = await fetch("/api/runes");
+        const data = res.ok ? await res.json() : {};
+        runeAvailable = data;
+        for (const k of ["keystone","subrune","smallrune"]) {
+            if (!(k in runeAvailable)) runeAvailable[k] = [];
+        }
+    } catch(e) { runeAvailable = { keystone:[], subrune:[], smallrune:[] }; }
+}
+
+/* === Render editor blocks from blocksData === */
+function renderBlocks() {
+    editor.innerHTML = "";
+    blocksData.forEach((block, index) => {
+        const div = document.createElement("div");
+        div.className = "block";
+        div.dataset.index = index;
+        div.dataset.oldIndex = index;
+        div.setAttribute("draggable", "true");
+
+        const header = document.createElement("div");
+        header.className = "block-header";
+        const handle = document.createElement("div");
+        handle.className = "drag-handle";
+        handle.title = "Zum Verschieben ziehen";
+        handle.innerText = "☰";
+        header.appendChild(handle);
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "delete-btn";
+        delBtn.innerText = "Löschen";
+        delBtn.addEventListener("click", () => { deleteBlock(index); });
+        header.appendChild(delBtn);
+
+        const content = document.createElement("div");
+        content.className = "block-content";
+
+        if (block.type === "text") {
+            content.innerHTML = `<label>Textblock:</label>
+                <textarea oninput="updateBlock(${index}, this.value)">${escapeHtml(block.content || "")}</textarea>`;
+        } else if (block.type === "heading") {
+            content.innerHTML = `<label>Überschrift:</label>
+                <input type="text" value="${escapeHtml(block.content || "")}" oninput="updateBlock(${index}, this.value)">
+                <select onchange="updateExtra(${index}, this.value)">
+                    <option value="h2" ${block.extra==="h2"?"selected":""}>H2</option>
+                    <option value="h3" ${block.extra==="h3"?"selected":""}>H3</option>
+                    <option value="h4" ${block.extra==="h4"?"selected":""}>H4</option>
+                </select>`;
+        } else if (block.type === "image") {
+            content.innerHTML = `<label>Bild (Pfad oder Upload):</label>
+                <div style="display:flex;gap:10px;align-items:center;">
+                  <input type="text" placeholder="z.B. uploads/mein.jpg oder items/ad/xyz.png" value="${escapeHtml(block.content || "")}" oninput="updateBlock(${index}, this.value)" style="flex:1;">
+                  <input type="file" onchange="handleImageFile(${index}, this.files)" accept="image/*">
+                </div>`;
+            if (block.content) {
+                const previewSrc = imageSrcFromStored(block.content);
+                content.innerHTML += `<div><img src="${previewSrc}" class="img-preview" onerror="this.style.display='none'"></div>`;
+            }
+        } else if (block.type === "item_grid") {
+            let previewHtml = `<p>Item-Grid</p><div class="item-grid-preview">`;
+            // safer detection: prefer explicit block.items, otherwise try to parse extra
+            let itemsArr = [];
+            if (Array.isArray(block.items) && block.items.length) {
+                itemsArr = block.items;
+            } else if (block.extra) {
+                try {
+                    const parsed = (typeof block.extra === "string") ? JSON.parse(block.extra) : block.extra;
+                    if (Array.isArray(parsed)) itemsArr = parsed;
+                } catch(e) {
+                    // ignore
+                }
+            }
+
+            if (itemsArr.length === 0) previewHtml += `<div style="color:#666">Keine Items</div>`;
+            else {
+                itemsArr.forEach(it => {
+                    const src = imageSrcFromStored(it.img || it.static_path || it.path || it);
+                    const title = escapeHtml((it && (it.name || it.title || it.id)) || "");
+                    previewHtml += `<img src="${src}" onerror="this.style.display='none'" title="${title}">`;
+                });
+            }
+            previewHtml += `</div><button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="openItemPicker(${index})">Items verwalten</button>`;
+            content.innerHTML = previewHtml;
+        } else if (block.type === "rune_grid") {
+            // prefer explicit runes object, else try extra
+            let runes = block.runes || null;
+            if (!runes && block.extra) {
+                try { runes = typeof block.extra === "string" ? JSON.parse(block.extra) : block.extra; } catch(e){ runes = null; }
+            }
+            runes = runes || { keystone: [], subrune: [], smallrune: [] };
+
+            function colHtml(title, arr) {
+                let s = `<div class="rune-col-preview"><div style="font-size:0.9em;color:#555;margin-bottom:6px;">${escapeHtml(title)}</div>`;
+                if (!arr || arr.length === 0) s += `<div style="color:#888;font-size:0.9em">—</div>`;
+                else arr.forEach(it => s += `<img src="${imageSrcFromStored(it)}" onerror="this.style.display='none'">`);
+                s += `</div>`;
+                return s;
+            }
+            let html = `<div style="display:flex;gap:12px;align-items:flex-start;">`;
+            html += colHtml("keystone", runes.keystone);
+            html += colHtml("subrune", runes.subrune);
+            html += colHtml("smallrune", runes.smallrune);
+            html += `</div><button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="openRunePicker(${index})">Runen verwalten</button>`;
+            content.innerHTML = html;
+        }
+
+        div.appendChild(header);
+        div.appendChild(content);
+
+        handle.addEventListener('pointerdown', () => { dragAllowed = true; });
+        handle.addEventListener('pointerup', () => { dragAllowed = false; });
+        handle.addEventListener('pointercancel', () => { dragAllowed = false; });
+        document.addEventListener('pointerup', () => { dragAllowed = false; }, { once: false });
+
+        div.addEventListener("dragstart", (e) => {
+            if (!dragAllowed) { e.preventDefault(); return; }
+            div.classList.add("dragging");
+            e.dataTransfer.effectAllowed = 'move';
+            try { if (typeof e.dataTransfer.setDragImage === "function") e.dataTransfer.setDragImage(handle, 16, 16); } catch (err) {}
+        });
+        div.addEventListener("dragend", () => { div.classList.remove("dragging"); rebuildBlocksFromDOM(); dragAllowed = false; });
+
+        editor.appendChild(div);
+    });
+
+    syncHiddenInput();
+}
+
+function rebuildBlocksFromDOM() {
+    const domBlocks = [...editor.querySelectorAll(".block")];
+    const newBlocks = domBlocks.map(dom => {
+        const oldIdx = parseInt(dom.dataset.oldIndex || dom.dataset.index, 10);
+        if (Number.isFinite(oldIdx) && oldIdx >= 0 && oldIdx < blocksData.length) {
+            return JSON.parse(JSON.stringify(blocksData[oldIdx]));
+        } else {
+            return { type: "text", content: "" };
+        }
+    });
+    blocksData = newBlocks;
+    renderBlocks();
+}
+
+editor.addEventListener("dragover", e => {
+    e.preventDefault();
+    const dragging = document.querySelector(".dragging");
+    if (!dragging) return;
+    const siblings = [...editor.querySelectorAll(".block:not(.dragging)")];
+    let nextSibling = siblings.find(sib => e.clientY <= sib.offsetTop + sib.offsetHeight / 2);
+    editor.insertBefore(dragging, nextSibling);
+});
+
+/* Editor helpers */
+function addBlock(type) {
+    const b = { type: type, content: "", extra: null };
+    if (type === "item_grid") b.items = [];
+    if (type === "rune_grid") b.runes = { keystone: [], subrune: [], smallrune: [] };
+    blocksData.push(b);
+    renderBlocks();
+}
+function deleteBlock(idx) { blocksData.splice(idx,1); renderBlocks(); }
+function updateBlock(idx, value) { blocksData[idx].content = value; syncHiddenInput(); }
+function updateExtra(idx, value) { blocksData[idx].extra = value; syncHiddenInput(); }
+function syncHiddenInput(){ hiddenInput.value = JSON.stringify(blocksData); }
+
+/* image upload */
+async function handleImageFile(index, files){
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    const form = new FormData();
+    form.append("file", file);
+    try {
+        const res = await fetch("/upload_image", { method: "POST", body: form });
+        if (!res.ok) throw new Error("Upload fehlgeschlagen");
+        const data = await res.json();
+        if (data && data.filename) {
+            blocksData[index].content = data.filename;
+            renderBlocks();
+            return;
+        }
+    } catch (e) {
+        console.warn("upload_image nicht verfügbar oder Fehler:", e);
+        alert("Upload fehlgeschlagen. Du kannst stattdessen den Pfad manuell eintragen.");
+    }
+}
+
+/* Item picker */
+async function openItemPicker(blockIndex){
+    pickerCurrentBlockIndex = blockIndex;
+    if (Object.keys(pickerAvailable).length === 0) await loadAvailableItems();
+
+    // Extract previously selected items from block (normalize to keys like 'cat/filename' or 'uploads/filename')
+    const items = (Array.isArray(blocksData[blockIndex].items) && blocksData[blockIndex].items.length) ? blocksData[blockIndex].items : (function(){
+        try {
+            const x = blocksData[blockIndex].extra && typeof blocksData[blockIndex].extra === 'string' ? JSON.parse(blocksData[blockIndex].extra) : blocksData[blockIndex].extra;
+            return Array.isArray(x) ? x : [];
+        } catch(e){ return [] }
+    })();
+
+    function itemKeyFromEntry(it){
+        if (!it) return null;
+        // if it's a string like 'items/ap/foo.png' or 'uploads/foo.png'
+        if (typeof it === 'string'){
+            let s = String(it).replace(/^\/?static\//,'').replace(/^\//,'');
+            if (s.startsWith('items/')) return s.slice('items/'.length); // returns 'ap/foo.png'
+            return s; // could be 'uploads/foo.png' or other
+        }
+        // object-like
+        if (it.path) { let s=String(it.path).replace(/^\/?static\//,'').replace(/^\//,''); if (s.startsWith('items/')) return s.slice('items/'.length); return s; }
+        if (it.img)  { let s=String(it.img).replace(/^\/?static\//,'').replace(/^\//,''); if (s.startsWith('items/')) return s.slice('items/'.length); return s; }
+        if (it.static_path) { let s=String(it.static_path).replace(/^\/?static\//,'').replace(/^\//,''); if (s.startsWith('items/')) return s.slice('items/'.length); return s; }
+        if (it.name) return it.name;
+        return null;
+    }
+
+    pickerSelected = new Set(items.map(itemKeyFromEntry).filter(Boolean));
+    renderItemPicker();
+    document.getElementById("itemPickerModal").style.display = "block";
+}
+function closeItemPicker(){ document.getElementById("itemPickerModal").style.display = "none"; pickerCurrentBlockIndex=null; }
+function renderItemPicker(){
+    const body = document.getElementById("itemPickerBody");
+    body.innerHTML = "";
+    if (!pickerAvailable || Object.keys(pickerAvailable).length === 0) {
+        body.innerHTML = "<p>Keine Items verfügbar.</p>";
+        return;
+    }
+    for (const cat of Object.keys(pickerAvailable)) {
+        const h = document.createElement("h5"); h.textContent = cat.toUpperCase(); body.appendChild(h);
+        const wrap = document.createElement("div"); wrap.classList.add("d-flex","flex-wrap");
+        for (const fname of pickerAvailable[cat]) {
+            // key normalized as 'cat/filename'
+            const key = `${cat}/${fname}`;
+            const img = document.createElement("img");
+            img.src = `/static/items/${cat}/${fname}`;
+            img.width = 56; img.height = 56;
+            img.className = "picker-item";
+            img.dataset.key = key;
+            if (pickerSelected.has(key)) img.classList.add("selected");
+            img.onclick = () => {
+                const k = img.dataset.key;
+                if (pickerSelected.has(k)) { pickerSelected.delete(k); img.classList.remove("selected"); }
+                else { pickerSelected.add(k); img.classList.add("selected"); }
+            };
+            wrap.appendChild(img);
+        }
+        body.appendChild(wrap);
+    }
+}
+function confirmItemPicker(){
+    if (pickerCurrentBlockIndex===null) return;
+    // store as array of 'items/<cat>/<filename>' strings so backend can parse easily
+    blocksData[pickerCurrentBlockIndex].items = Array.from(pickerSelected).map(k => {
+        // if already starts with uploads/ keep as is
+        if (k.startsWith('uploads/')) return k;
+        return `items/${k}`;
+    });
+    blocksData[pickerCurrentBlockIndex].extra = JSON.stringify(blocksData[pickerCurrentBlockIndex].items);
+    closeItemPicker();
+    renderBlocks();
+}
+
+/* Rune picker */
+async function openRunePicker(blockIndex){
+    runePickerCurrentBlockIndex = blockIndex;
+    if (Object.keys(runeAvailable).length === 0) await loadAvailableRunes();
+    const existing = blocksData[blockIndex].runes || (blocksData[blockIndex].extra ? (function(){
+        try { return JSON.parse(blocksData[blockIndex].extra); } catch(e){ return null; }
+    })() : null) || { keystone: [], subrune: [], smallrune: [] };
+    runeSelected = {
+        keystone: new Set((existing.keystone||[]).map(x => String(x).split("/").pop())),
+        subrune: new Set((existing.subrune||[]).map(x => String(x).split("/").pop())),
+        smallrune: new Set((existing.smallrune||[]).map(x => String(x).split("/").pop()))
+    };
+    renderRunePicker();
+    document.getElementById("runePickerModal").style.display = "block";
+}
+function closeRunePicker(){ document.getElementById("runePickerModal").style.display = "none"; runePickerCurrentBlockIndex=null; }
+
+function renderRunePicker(){
+    const body = document.getElementById("runePickerBody");
+    body.innerHTML = "";
+    if (!runeAvailable || Object.keys(runeAvailable).length === 0) {
+        body.innerHTML = "<p>Keine Runen verfügbar (prüfe static/runes Verzeichnis oder /api/runes).</p>";
+        return;
+    }
+
+    const left = document.createElement("div"); left.className = "rune-available";
+    const right = document.createElement("div"); right.className = "rune-selected";
+
+    const cats = ["keystone","subrune","smallrune"];
+    const extraKeys = Object.keys(runeAvailable).filter(k => !cats.includes(k));
+    const orderedKeys = cats.concat(extraKeys);
+
+    orderedKeys.forEach(cat => {
+        const files = runeAvailable[cat] || [];
+        const block = document.createElement("div"); block.className = "rune-cat";
+        const title = document.createElement("div"); title.className = "rune-cat-title"; title.textContent = (cat||"").toUpperCase();
+        block.appendChild(title);
+
+        const grid = document.createElement("div"); grid.className = "rune-grid";
+        files.forEach(fname => {
+            const img = document.createElement("img");
+            img.src = `/static/runes/${cat}/${fname}`;
+            img.title = fname;
+            if (!runeSelected[cat]) runeSelected[cat] = new Set();
+            if (runeSelected[cat].has(fname)) img.classList.add("selected");
+            img.onclick = () => {
+                if (runeSelected[cat].has(fname)) runeSelected[cat].delete(fname);
+                else runeSelected[cat].add(fname);
+                renderRunePicker();
+            };
+            grid.appendChild(img);
+        });
+
+        block.appendChild(grid);
+        left.appendChild(block);
+    });
+
+    const header = document.createElement("div"); header.className = "sel-title"; header.textContent = "Ausgewählt";
+    right.appendChild(header);
+
+    ["keystone","subrune","smallrune"].forEach(cat => {
+        const ct = document.createElement("div"); ct.style.marginBottom="8px";
+        const t = document.createElement("div"); t.style.fontWeight="600"; t.textContent = cat.toUpperCase();
+        ct.appendChild(t);
+        const list = document.createElement("div"); list.className = "sel-list";
+        const arr = Array.from(runeSelected[cat] || []);
+        if (arr.length === 0) {
+            const none = document.createElement("div"); none.style.color="#888"; none.textContent="—";
+            list.appendChild(none);
+        } else {
+            arr.forEach(fname => {
+                const img = document.createElement("img");
+                let src = `/static/runes/${cat}/${fname}`;
+                // fallback: search in other folders if not found in this cat
+                for (const k of Object.keys(runeAvailable)) {
+                    if (runeAvailable[k] && runeAvailable[k].includes(fname)) {
+                        src = `/static/runes/${k}/${fname}`;
+                        break;
+                    }
+                }
+                img.src = src;
+                img.title = fname;
+                img.onclick = () => {
+                    runeSelected[cat].delete(fname);
+                    renderRunePicker();
+                };
+                list.appendChild(img);
+            });
+        }
+        ct.appendChild(list);
+        right.appendChild(ct);
+    });
+
+    body.appendChild(left);
+    body.appendChild(right);
+}
+
+function confirmRunePicker(){
+    if (runePickerCurrentBlockIndex===null) return;
+    const obj = { keystone: [], subrune: [], smallrune: [] };
+    for (const cat of ["keystone","subrune","smallrune"]) {
+        const arr = Array.from(runeSelected[cat] || []);
+        obj[cat] = arr.map(fname => `${cat}/${fname}`);
+    }
+    blocksData[runePickerCurrentBlockIndex].runes = obj;
+    blocksData[runePickerCurrentBlockIndex].extra = JSON.stringify(obj);
+    closeRunePicker();
+    renderBlocks();
+}
+
+/* Init */
+document.addEventListener("DOMContentLoaded", () => {
+    // Hook toolbar
+    document.querySelectorAll(".toolbar button[data-type]").forEach(btn => btn.addEventListener("click", ()=> addBlock(btn.dataset.type)));
+    // if blocksData was empty but hidden input contains something (safety), try to read it:
+    try {
+        const hiddenVal = document.getElementById("blocks_json").value;
+        if ((blocksData === null || blocksData.length === 0) && hiddenVal) {
+            const parsed = JSON.parse(hiddenVal);
+            if (Array.isArray(parsed)) blocksData = parsed;
+        }
+    } catch(e) { /* ignore */ }
+    renderBlocks();
+    document.getElementById("article-form").addEventListener("submit", ()=> syncHiddenInput());
+});
+</script>
+{% endblock %}

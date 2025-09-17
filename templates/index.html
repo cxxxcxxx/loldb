@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="index-container">
+    <h1 class="index-title">Alle Kategorien</h1>
+    <p class="index-description">Wähle eine Kategorie, um ihre Artikel oder Unterkategorien zu sehen:</p>
+
+    <div class="categories-grid">
+        {% if g.categories_global %}
+            {% for cat in g.categories_global %}
+            <div class="category-card">
+                <a href="{{ url_for('show_category', cat_id=cat.id) }}">
+                    <h3>{{ cat.name }}</h3>
+                    <p>{{ cat.children|length }} Unterkategorien</p>
+                </a>
+
+                {% if cat.children %}
+                <div class="subcategory-list">
+                    {% for sub in cat.children %}
+                        <div class="subcategory-card">
+                            <a href="{{ url_for('show_category', cat_id=sub.id) }}">
+                                <h4>{{ sub.name }}</h4>
+                                <p>{{ sub.children|length }} Unterkategorien</p>
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if current_user.is_authenticated and current_user.is_admin %}
+                <div class="category-actions">
+                    <a href="{{ url_for('add_category') }}" class="btn-edit">Neue Kategorie</a>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <p>Keine Kategorien vorhanden.</p>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.index-container {
+    max-width: 1000px;
+    margin: auto;
+    padding: 20px;
+}
+.index-title {
+    font-size: 2.5em;
+    margin-bottom: 10px;
+}
+.index-description {
+    font-size: 1.2em;
+    margin-bottom: 30px;
+    color: #555;
+}
+.categories-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+.category-card {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    text-decoration: none;
+    color: #333;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.category-card a {
+    text-decoration: none;
+    color: inherit;
+}
+.category-card h3 {
+    margin-top: 0;
+    font-size: 1.4em;
+    margin-bottom: 10px;
+}
+.category-card p {
+    font-size: 0.95em;
+    color: #777;
+}
+.category-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    color: #007bff;
+}
+.subcategory-list {
+    margin-top: 15px;
+    padding-left: 10px;
+    border-left: 3px solid #eee;
+}
+.subcategory-card {
+    background-color: #f9f9f9;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    transition: background 0.2s, transform 0.2s;
+}
+.subcategory-card:hover {
+    background-color: #eef6ff;
+    transform: translateX(3px);
+}
+.subcategory-card h4 {
+    margin: 0;
+    font-size: 1.1em;
+}
+.subcategory-card p {
+    font-size: 0.85em;
+    color: #666;
+    margin: 3px 0 0 0;
+}
+.category-actions {
+    margin-top: 10px;
+    text-align: right;
+}
+.btn-edit {
+    background: none;
+    border: 1px solid #007bff;
+    color: #007bff;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    text-decoration: none;
+    transition: 0.2s;
+}
+.btn-edit:hover {
+    background-color: #007bff;
+    color: #fff;
+}
+</style>
+{% endblock %}

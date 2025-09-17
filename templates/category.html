@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="category-container">
+    <h1 class="category-title">{{ category['name'] }}</h1>
+    <p class="category-description">Hier siehst du alle Artikel dieser Kategorie:</p>
+
+    {% if current_user.is_authenticated and current_user.is_admin %}
+        <a href="{{ url_for('add_article') }}" class="btn btn-sm btn-primary mb-3">Artikel hinzufügen</a>
+    {% endif %}
+
+    {% if grouped_articles %}
+        {% for letter in grouped_articles.keys()|list|sort %}
+            <h2 class="mt-3">{{ letter }}</h2>
+            <div class="articles-grid">
+                {% for art in grouped_articles[letter] %}
+                <div class="article-card">
+                    <a href="{{ url_for('article', art_id=art['id']) }}">
+                        <h3>{{ art['title'] }}</h3>
+                        <p>Artikel-ID: {{ art['id'] }}</p>
+                    </a>
+                    {% if current_user.is_authenticated and current_user.is_admin %}
+                        <a href="{{ url_for('edit_article', art_id=art['id']) }}" class="edit-btn">✏️ Bearbeiten</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    {% else %}
+        <p>Keine Artikel in dieser Kategorie vorhanden.</p>
+    {% endif %}
+</div>
+
+<style>
+.category-container { max-width: 1000px; margin: auto; padding: 20px; }
+.category-title { font-size: 2.5em; margin-bottom: 10px; }
+.category-description { font-size: 1.2em; margin-bottom: 30px; color: #555; }
+.articles-grid { display: flex; flex-wrap: wrap; gap: 20px; }
+.article-card { background-color: #fff; flex: 1 1 250px; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-decoration: none; color: #333; transition: transform 0.2s, box-shadow 0.2s; }
+.article-card h3 { margin-top: 0; font-size: 1.4em; margin-bottom: 10px; }
+.article-card p { font-size: 0.95em; color: #777; }
+.article-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); color: #007bff; }
+.edit-btn { display: inline-block; margin-top: 10px; font-size: 0.9em; color: #007bff; text-decoration: none; }
+.edit-btn:hover { text-decoration: underline; }
+</style>
+{% endblock %}

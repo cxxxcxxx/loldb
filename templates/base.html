@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title if title else "Mein Wiki" }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f2f5; }
+        .sidebar { position: sticky; top: 0; height: 100vh; background-color: #fff; border-right: 1px solid #dee2e6; padding: 20px; }
+        .sidebar h5 { font-size: 1.5em; margin-bottom: 20px; }
+        .sidebar .nav-link { font-size: 1.05em; padding: 6px 10px; border-radius: 5px; color: #333; display:block; transition: all 0.2s; }
+        .sidebar .nav-link:hover { background-color: #007bff; color: #fff; }
+        main { padding: 30px; }
+        header.navbar { margin-bottom: 0; }
+    </style>
+</head>
+<body>
+<header class="navbar navbar-dark bg-dark p-3">
+    <div class="container-fluid">
+        <a href="{{ url_for('index') }}" class="navbar-brand">📚 Mein Wiki</a>
+        <nav class="d-flex gap-2 align-items-center">
+            {% if current_user.is_authenticated %}
+                <span class="text-light me-2">Hi, {{ current_user.username }}</span>
+                <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-light">Logout</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-light">Login</a>
+            {% endif %}
+            {% if current_user.is_authenticated and current_user.is_admin %}
+                <a href="{{ url_for('add_category') }}" class="btn btn-sm btn-outline-light ms-2">➕ Kategorie</a>
+                <a href="{{ url_for('add_article') }}" class="btn btn-sm btn-outline-light">➕ Artikel</a>
+            {% endif %}
+        </nav>
+    </div>
+</header>
+
+<div class="container-fluid">
+    <div class="row">
+        <aside class="col-12 col-md-3 col-lg-2 sidebar">
+            <h5>Kategorien</h5>
+            <div class="accordion" id="categoryAccordion">
+                {% for cat in g.categories_global %}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading{{ cat.id }}">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#collapse{{ cat.id }}" aria-expanded="false"
+                                    aria-controls="collapse{{ cat.id }}">
+                                {{ cat.name }}
+                            </button>
+                        </h2>
+                        <div id="collapse{{ cat.id }}" class="accordion-collapse collapse"
+                             aria-labelledby="heading{{ cat.id }}" data-bs-parent="#categoryAccordion">
+                            <div class="accordion-body">
+                                {% if cat.children %}
+                                    <ul class="nav flex-column">
+                                        {% for sub in cat.children %}
+                                            <li class="nav-item">
+                                                <a class="nav-link" href="{{ url_for('show_category', cat_id=sub.id) }}">{{ sub.name }}</a>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <p class="text-muted small">Keine Unterkategorien</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </aside>
+
+        <main class="col-12 col-md-9 col-lg-10">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="mb-3">
+                        {% for msg in messages %}
+                            <div class="alert alert-info">{{ msg }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

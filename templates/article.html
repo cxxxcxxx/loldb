@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ article.title }}</h1>
+
+<div class="article-blocks">
+  {% for block in blocks %}
+    <div class="article-block my-3 p-3 border rounded">
+
+      {% if block.type == 'text' %}
+        <div class="article-text">{{ block.content }}</div>
+
+      {% elif block.type == 'heading' %}
+        <h3 class="article-heading">{{ block.content }}</h3>
+
+      {% elif block.type == 'image' %}
+        {% if block.content %}
+          <div class="article-image-container">
+            <img src="{{ url_for('static', filename=block.content) }}" 
+                 alt="" class="article-image">
+          </div>
+        {% endif %}
+
+      {% elif block.type == 'item_grid' %}
+        <div><strong>Item Grid</strong></div>
+        {% set items = build_items_by_block.get(block.id, []) %}
+        <div class="d-flex flex-wrap gap-2 mt-2 item-build-grid">
+          {% if items %}
+            {% for path in items %}
+              <div class="item-slot">
+                <img src="{{ url_for('static', filename=path) }}" alt="item">
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="text-muted">Keine Items</div>
+          {% endif %}
+        </div>
+
+      {% elif block.type == 'rune_grid' %}
+        <div><strong>Rune Grid</strong></div>
+        {% set grouped = build_items_by_block.get(block.id, {'keystone':[],'subrune':[],'smallrune':[]}) %}
+        <div class="rune-grid">
+          <div class="rune-col">
+            <div class="rune-label">Keystone</div>
+            {% if grouped.keystone %}
+              {% for path in grouped.keystone %}
+                <img src="{{ url_for('static', filename=path) }}" alt="keystone" class="rune-icon">
+              {% endfor %}
+            {% else %}
+              <div class="text-muted">—</div>
+            {% endif %}
+          </div>
+
+          <div class="rune-col">
+            <div class="rune-label">Subrune</div>
+            {% if grouped.subrune %}
+              {% for path in grouped.subrune %}
+                <img src="{{ url_for('static', filename=path) }}" alt="subrune" class="rune-icon">
+              {% endfor %}
+            {% else %}
+              <div class="text-muted">—</div>
+            {% endif %}
+          </div>
+
+          <div class="rune-col">
+            <div class="rune-label">Smallrune</div>
+            {% if grouped.smallrune %}
+              {% for path in grouped.smallrune %}
+                <img src="{{ url_for('static', filename=path) }}" alt="smallrune" class="rune-icon">
+              {% endfor %}
+            {% else %}
+              <div class="text-muted">—</div>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+    </div>
+  {% endfor %}
+</div>
+
+<style>
+.article-container {
+    max-width: 900px;
+    margin: auto;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+}
+
+.article-title { font-size: 2.5em; margin-bottom: 20px; }
+.article-heading { font-size: 1.8em; margin-top: 25px; margin-bottom: 15px; color: #007bff; }
+.article-text { font-size: 1.1em; line-height: 1.6; margin-bottom: 15px; }
+
+.article-image-container { margin: 15px 0; text-align: center; }
+.article-image { max-width: 100%; height: auto; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+
+/* Item Grid */
+.item-build-grid {
+    display: flex; flex-wrap: wrap; justify-content: flex-start;
+    gap: 10px; margin: 15px 0;
+}
+.item-slot { position: relative; width: 60px; height: 60px; text-align: center; }
+.item-slot img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+
+/* Rune Grid */
+.rune-grid { display: flex; gap: 20px; align-items: flex-start; margin-top: 10px; }
+.rune-col { display: flex; flex-direction: column; align-items: flex-start; }
+.rune-label { font-weight: 600; margin-bottom: 6px; }
+.rune-icon { width: 44px; height: 44px; object-fit: contain; margin: 6px 0; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+</style>
+{% endblock %}
