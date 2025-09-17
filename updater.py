@@ -1,60 +1,56 @@
 import os
-import zipfile
 import requests
-from tkinter import messagebox, Tk
+import zipfile
 
-# Config
-GITHUB_ZIP_URL = "https://github.com/DEIN_USERNAME/DEIN_REPO/archive/refs/heads/main.zip"
+UPDATE_URL = "https://github.com/cxxxcxxx/loldb/releases/latest/download/patch.zip"
 VERSION_FILE = "version.txt"
+LOCAL_VERSION_FILE = VERSION_FILE
 
 def get_local_version():
-    if not os.path.exists(VERSION_FILE):
-        return "0.0.0.0"
-    with open(VERSION_FILE, "r") as f:
-        return f.read().strip()
+    if os.path.exists(LOCAL_VERSION_FILE):
+        with open(LOCAL_VERSION_FILE, "r") as f:
+            return f.read().strip()
+    return "0.0.0"
 
-def set_local_version(version):
-    with open(VERSION_FILE, "w") as f:
-        f.write(version)
-
-def check_for_update():
-    local_version = get_local_version()
-
-    # Lade online version.txt aus GitHub (roh)
+def get_remote_version():
+    # Version aus GitHub abrufen
     try:
-        raw_version_url = "https://raw.githubusercontent.com/DEIN_USERNAME/DEIN_REPO/main/version.txt"
-        r = requests.get(raw_version_url)
-        r.raise_for_status()
-        online_version = r.text.strip()
-    except Exception as e:
-        print("Fehler beim Prüfen der Version:", e)
-        return False
+        r = requests.get("https://raw.githubusercontent.com/cxxxcxxx/loldb/main/version.txt")
+        if r.status_code == 200:
+            return r.text.strip()
+    except:
+        pass
+    return None
 
-    if online_version > local_version:
-        # Update verfügbar
-        root = Tk()
-        root.withdraw()  # Kein Hauptfenster
-        if messagebox.askokcancel("Update verfügbar", f"Neue Version {online_version} verfügbar.\nJetzt updaten?"):
-            download_and_install_patch()
-            set_local_version(online_version)
-            messagebox.showinfo("Update", "Update erfolgreich installiert. Bitte App neu starten.")
-        root.destroy()
-        return True
+def download_patch():
+    try:
+        r = requests.get(UPDATE_URL, stream=True)
+        if r.status_code == 200:
+            with open("patch.zip", "wb") as f:
+                for chunk in r.iter_content(1024):
+                    f.write(chunk)
+            return True
+    except Exception as e:
+        print("Download fehlgeschlagen:", e)
     return False
 
-def download_and_install_patch():
+def apply_patch():
+    if not os.path.exists("patch.zip"):
+        return False
     try:
-        r = requests.get(GITHUB_ZIP_URL)
-        r.raise_for_status()
-        zip_path = "update_patch.zip"
-        with open(zip_path, "wb") as f:
-            f.write(r.content)
-
-        # Entpacken
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            zip_ref.extractall(".")  # Entpackt in den aktuellen Ordner
-
-        os.remove(zip_path)
-        print("Patch installiert.")
+        with zipfile.ZipFile("patch.zip", "r") as zip_ref:
+            zip_ref.extractall(".")  # alles überschreiben
+        os.remove("patch.zip")
+        return True
     except Exception as e:
-        print("Fehler beim Patchen:", e)
+        print("Patch konnte nicht angewendet werden:", e)
+        return False
+
+def check_for_update():
+    local = get_local_version()
+    remote = get_remote_version()
+    if remote is None:
+        return False, None
+    if local != remote:
+        return True, remote
+    return False, None

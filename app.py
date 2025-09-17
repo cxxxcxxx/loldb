@@ -1,7 +1,26 @@
-from updater import check_for_update
 
-# Prüfen beim Start
-check_for_update()
+from updater import check_for_update, download_patch, apply_patch
+from tkinter import messagebox, Tk
+import sys
+
+# Prüfe Update beim Start
+update_available, new_version = check_for_update()
+if update_available:
+    root = Tk()
+    root.withdraw()  # kein leeres Fenster
+    if messagebox.askokcancel("Update verfügbar", f"Neue Version {new_version} verfügbar. Patch jetzt installieren?"):
+        if download_patch() and apply_patch():
+            # Lokale version.txt aktualisieren
+            with open("version.txt", "w") as f:
+                f.write(new_version)
+            messagebox.showinfo("Update", "Patch erfolgreich installiert! Bitte Programm neu starten.")
+            sys.exit(0)
+        else:
+            messagebox.showerror("Fehler", "Patch konnte nicht heruntergeladen oder angewendet werden.")
+    root.destroy()
+
+
+
 
 import os
 import sqlite3
