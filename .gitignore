@@ -1,0 +1,17 @@
+﻿# VSCode Settings
+.vscode/
+
+# Patch- und Dev-Dateien
+patchraw/
+create_admin.py
+patchbuilder.py
+reset_admin.py
+check_admin.py
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Datenbank / lokale Daten
+wiki.db
+*.sqlite
