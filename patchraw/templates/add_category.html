@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-3">
+    <h1>Neue Kategorie</h1>
+    <form method="post">
+        <div class="mb-2">
+            <label>Name</label>
+            <input class="form-control" name="name" required>
+        </div>
+        <div class="mb-2">
+            <label>Oberkategorie (optional)</label>
+            <select class="form-select" name="parent_id">
+                <option value="">Keine</option>
+                {% for c in categories %}
+                    <option value="{{ c['id'] }}">{{ c['name'] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button class="btn btn-primary" type="submit">Erstellen</button>
+    </form>
+</div>
+{% endblock %}

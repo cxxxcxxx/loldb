@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Item zu diesem Grid hinzufügen</h1>
+
+<form method="post">
+    {% for cat, items in items_by_category.items() %}
+        <h3>{{ cat.upper() }} Items</h3>
+        <div class="item-grid-category">
+            {% for item in items %}
+                <label class="item-label" style="display:inline-block;margin:6px;cursor:pointer;">
+                    <input type="radio" name="item_name" value="{{ cat }}/{{ item }}" style="display:none;">
+                    <img src="{{ url_for('static', filename='items/' + cat + '/' + item) }}" class="selectable-item" width="60" height="60" style="object-fit:contain;border-radius:5px;">
+                </label>
+            {% endfor %}
+        </div>
+    {% endfor %}
+    <br>
+    <button type="submit" class="btn-add-item btn btn-primary">Hinzufügen</button>
+</form>
+
+<style>
+.item-grid-category { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:15px; }
+.item-label img { width:60px; height:60px; object-fit:contain; border-radius:5px; cursor:pointer; transition:0.2s; border:2px solid transparent; }
+.selectable-item.selected { outline:3px solid #ffcc00; outline-offset:2px; border-color:#ffcc00; }
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const items = document.querySelectorAll(".selectable-item");
+    items.forEach(item => {
+        item.addEventListener("click", () => {
+            items.forEach(i => i.classList.remove("selected"));
+            item.classList.add("selected");
+            // set radio
+            const radio = item.closest("label").querySelector("input[type=radio]");
+            if (radio) radio.checked = true;
+        });
+    });
+});
+</script>
+{% endblock %}
